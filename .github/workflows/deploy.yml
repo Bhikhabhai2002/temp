@@ -6,26 +6,47 @@ on:
       - main  # Deploy only when changes are pushed to main
 
 jobs:
+  # Build Job
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npm install @mediapipe/face_mesh device-detector-js
+
+      - name: Build Project
+        run: |
+          npm run build
+
+      - name: Upload artifact to enable deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: poduction file
+          path: ./build
   deploy:
+
+    needs: build
+       
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          node-version: 18  # Use your project's Node.js version
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build project
-        run: npm run build
+          name: poduction file
+          path: ./build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GH_TOKEN }}
           publish_dir: ./build

@@ -36,15 +36,6 @@ const FaceMeshApp = () => {
         if (results.multiFaceLandmarks) {
           results.multiFaceLandmarks.forEach((landmarks) => {
             drawLandmarks(ctx, landmarks);
-            for (let i = 0; i < landmarks.length; i++) {
-              const x = landmarks[i].x * canvas.width;
-              const y = landmarks[i].y * canvas.height;
-
-              ctx.beginPath();
-              ctx.arc(x, y, 1, 0, 2 * Math.PI);
-              ctx.fillStyle = "yellow";
-              ctx.fill();
-            }
           });
         }
       });
@@ -86,7 +77,10 @@ const FaceMeshApp = () => {
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
+  
+    //Reset before loading new image
+    resetWebsiteData();
+  
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -94,30 +88,62 @@ const FaceMeshApp = () => {
       img.onload = async () => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
-
-        // Clear previous drawing
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Resize canvas to match image
+  
+        // Dynamically set canvas size to match image dimensions
         canvas.width = img.width;
         canvas.height = img.height;
-
-        // Draw the uploaded image
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-
-        // Process the image with FaceMesh
-        if (faceMesh) {
-          await faceMesh.send({ image: img });
+  
+        // Draw uploaded image
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  
+        //Ensure FaceMesh exists before processing
+        if (!faceMesh) {
+          console.error("FaceMesh not initialized yet!");
+          return;
+        }
+  
+        try {
+          await faceMesh.send({ image: img }); // Process new image
+        } catch (error) {
+          console.error("Error processing image with FaceMesh:", error);
         }
       };
     };
+  
     reader.readAsDataURL(file);
   };
+  
+  const resetWebsiteData = () => {
+    // 1️ Clear the Canvas
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 640; // Reset to default width
+      canvas.height = 480; // Reset to default height
+    }
+  
+    // 2️ Stop the Camera Stream (if active)
+    if (videoRef.current && videoRef.current.srcObject) {
+      let tracks = videoRef.current.srcObject.getTracks();
+      tracks.forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+  
 
   return (
     <div>
-      {/* Toggle Button */}
-      <button onClick={() => setUseCamera(!useCamera)} className="toggle-btn">
+      <button
+        onClick={() => {
+          setUseCamera(!useCamera);
+
+          // Clear the canvas when switching modes
+          const ctx = canvasRef.current.getContext("2d");
+          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }}
+        className="toggle-btn"
+      >
         {useCamera ? "Switch to Upload Image" : "Switch to Camera"}
       </button>
 
@@ -125,7 +151,13 @@ const FaceMeshApp = () => {
         {useCamera ? (
           <video className="input_video" ref={videoRef} autoPlay muted></video>
         ) : (
-          <input type="file" accept="image/*" onChange={handleImageUpload} className="upload-input" />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="upload-input"
+          />
+
         )}
 
         <div className="canvas-container">
@@ -137,14 +169,19 @@ const FaceMeshApp = () => {
 };
 
 const drawLandmarks = (ctx, landmarks) => {
+  if (!ctx || !landmarks) return;
+
+  const canvasWidth = ctx.canvas.width;
+  const canvasHeight = ctx.canvas.height;
+
   const drawConnectors = (indices, color) => {
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.beginPath();
 
     indices.forEach((index, i) => {
-      const x = landmarks[index].x * ctx.canvas.width;
-      const y = landmarks[index].y * ctx.canvas.height;
+      const x = landmarks[index].x * canvasWidth;
+      const y = landmarks[index].y * canvasHeight;
 
       if (i === 0) {
         ctx.moveTo(x, y);
@@ -156,15 +193,25 @@ const drawLandmarks = (ctx, landmarks) => {
     ctx.stroke();
   };
 
-  // Define face mesh connections
-  const FACEMESH_RIGHT_EYE = [33, 160, 158, 133, 153, 144, 33]; // Right eye (loop)
-  const FACEMESH_LEFT_EYE = [263, 373, 380, 362, 385, 387, 263]; // Left eye (loop)
-  const FACEMESH_LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 61]; // Lips outline
+  // Define facial feature connections
+  const FACEMESH_RIGHT_EYE = [33, 160, 158, 133, 153, 144, 33];
+  const FACEMESH_LEFT_EYE = [263, 373, 380, 362, 385, 387, 263];
+  const FACEMESH_LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 61];
 
-  // Draw each feature separately
-  drawConnectors(FACEMESH_RIGHT_EYE, "blue"); // Right eye
-  drawConnectors(FACEMESH_LEFT_EYE, "blue"); // Left eye
-  drawConnectors(FACEMESH_LIPS, "red"); // Lips
+  drawConnectors(FACEMESH_RIGHT_EYE, "blue");
+  drawConnectors(FACEMESH_LEFT_EYE, "blue");
+  drawConnectors(FACEMESH_LIPS, "red");
+
+  // Draw individual landmark points
+  landmarks.forEach((landmark) => {
+    const x = landmark.x * canvasWidth;
+    const y = landmark.y * canvasHeight;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 1, 0, 2 * Math.PI);
+    ctx.fillStyle = "yellow";
+    ctx.fill();
+  });
 };
 
 
